@@ -1,38 +1,48 @@
 package com.banking.bankingapp.service;
 
-import com.banking.bankingapp.model.Customer;
-import com.banking.bankingapp.repository.CurrentAccountRepository;
+import com.banking.bankingapp.model.constants.AccountType;
+import com.banking.bankingapp.model.entities.BankAccount;
+import com.banking.bankingapp.model.entities.Customer;
+import com.banking.bankingapp.repository.BankAccountRepository;
 import com.banking.bankingapp.repository.CustomerRepository;
-import com.banking.bankingapp.repository.SavingsAccountRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 public class CustomerService {
     private final CustomerRepository customerRepository;
-    private final CurrentAccountRepository currentAccountRepository;
-    private final SavingsAccountRepository savingsAccountRepository;
+    private final BankAccountRepository bankAccountRepository;
 
     private AccountService accountService;
     @Autowired
-    public CustomerService(@Qualifier("customerRepo") CustomerRepository customerRepository,
-                           @Qualifier("currentAccountRepo") CurrentAccountRepository currentAccountRepository,
-                           @Qualifier("savingsAccountRepository") SavingsAccountRepository savingsAccountRepository,
+    public CustomerService(CustomerRepository customerRepository,
+                           BankAccountRepository bankAccountRepository,
                            AccountService accountService) {
 
         this.customerRepository = customerRepository;
-        this.currentAccountRepository = currentAccountRepository;
-        this.savingsAccountRepository = savingsAccountRepository;
+        this.bankAccountRepository = bankAccountRepository;
         this.accountService = accountService;
     }
 
     public Customer onboardCustomer(Customer customer) {
-        customer.setSavingsAccount(this.accountService.createNewSavingsAccount());
-        customer.setCurrentAccount(this.accountService.createNewCurrentAccount());
+        BankAccount savingAccount = this.accountService
+                .createBankAccount(AccountType.SAVINGS, 500d, false);
+
+        BankAccount currentAccount = this.accountService
+                .createBankAccount(AccountType.CURRENT, 0.0d, true);
+
+       /* savingAccount.setCustomer(customer);
+        currentAccount.setCustomer(customer);
+*/
+        this.bankAccountRepository.save(savingAccount);
+        this.bankAccountRepository.save(currentAccount);
+
+        List<BankAccount> customerAccounts = Arrays.asList(savingAccount, currentAccount);
+        customer.setBankAccounts(customerAccounts);
         return this.customerRepository.save(customer);
     }
 

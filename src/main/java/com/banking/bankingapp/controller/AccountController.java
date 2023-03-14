@@ -1,8 +1,12 @@
 package com.banking.bankingapp.controller;
 
-import com.banking.bankingapp.model.*;
+import com.banking.bankingapp.exception.EntityNotFoundException;
+import com.banking.bankingapp.exception.InsufficientFundsException;
+import com.banking.bankingapp.model.dto.request.PaymentRequest;
+import com.banking.bankingapp.model.dto.request.TransactionRequest;
+import com.banking.bankingapp.model.dto.request.TransferRequest;
+import com.banking.bankingapp.model.dto.response.AccountTransactionResponse;
 import com.banking.bankingapp.service.AccountService;
-import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -13,10 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/account")
-@Api(value="banking-application", description="Operations pertaining to accounts in the banking application")
+@RequestMapping("/api/v1/account")
 public class AccountController {
-
     private AccountService accountService;
 
     @Autowired
@@ -25,26 +27,43 @@ public class AccountController {
     }
 
     @PostMapping("/transfer")
-    @ApiOperation(value = "Transfer funds to an account",response = Customer.class)
-    public ResponseEntity<Customer> transferFromSavings(@RequestBody TransferRequest transferRequest){
-       return new ResponseEntity<>(this.accountService.doTransfer(transferRequest), HttpStatus.OK);
+    public ResponseEntity<AccountTransactionResponse> transferFromSavings(@RequestBody TransferRequest transferRequest) {
+        try {
+            return new ResponseEntity<>(this.accountService.doTransfer(transferRequest), HttpStatus.OK);
+        } catch (EntityNotFoundException e) {
+            return new ResponseEntity(e.getMessage(), HttpStatus.NOT_FOUND);
+        } catch (InsufficientFundsException e) {
+            return new ResponseEntity(e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
     }
 
     @PostMapping("/pay")
-    @ApiOperation(value = "Receive payment from third party",response = Customer.class)
-    public ResponseEntity<BankAccount> receivePayment(@RequestBody PaymentRequest paymentRequest) {
-        return new ResponseEntity<>(this.accountService.receivePayment(paymentRequest), HttpStatus.OK);
+    public ResponseEntity<AccountTransactionResponse> receivePayment(@RequestBody PaymentRequest paymentRequest) {
+        try {
+            return new ResponseEntity<>(this.accountService.receivePayment(paymentRequest), HttpStatus.OK);
+        } catch (EntityNotFoundException e) {
+            return new ResponseEntity(e.getMessage(), HttpStatus.NOT_FOUND);
+        }
     }
 
     @PostMapping("/debit")
-    @ApiOperation(value = "Debit account",response = BankAccount.class)
-    public ResponseEntity<BankAccount> debitAccount(@RequestBody AccountRequest accountRequest) {
-        return new ResponseEntity<>(this.accountService.debitAccount(accountRequest), HttpStatus.OK);
+    @ApiOperation(value = "Debit account", response = AccountTransactionResponse.class)
+    public ResponseEntity<AccountTransactionResponse> debitAccount(@RequestBody TransactionRequest transactionRequest) {
+        try {
+            return new ResponseEntity<>(this.accountService.debitAccount(transactionRequest), HttpStatus.OK);
+        } catch (EntityNotFoundException e) {
+            return new ResponseEntity(e.getMessage(), HttpStatus.NOT_FOUND);
+        }
     }
 
     @PostMapping("/credit")
-    @ApiOperation(value = "Credit account",response = BankAccount.class)
-    public ResponseEntity<BankAccount> creditAccount(@RequestBody AccountRequest accountRequest) {
-        return new ResponseEntity<>(this.accountService.creditAccount(accountRequest), HttpStatus.OK);
+    public ResponseEntity<AccountTransactionResponse> creditAccount(@RequestBody TransactionRequest transactionRequest) {
+        try {
+            return new ResponseEntity<>(this.accountService.creditAccount(transactionRequest), HttpStatus.OK);
+        } catch (EntityNotFoundException e) {
+            return new ResponseEntity(e.getMessage(), HttpStatus.NOT_FOUND);
+        } catch (InsufficientFundsException e) {
+            return new ResponseEntity(e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
     }
 }

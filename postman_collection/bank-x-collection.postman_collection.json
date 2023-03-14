@@ -1,0 +1,322 @@
+{
+	"info": {
+		"_postman_id": "47558241-e416-4e63-925a-c0fd3c0b7925",
+		"name": "bank-x-collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "737417"
+	},
+	"item": [
+		{
+			"name": "onboardCustomer",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"firstName\": \"Mthoko\",\r\n    \"lastName\": \"Sithole\",\r\n    \"gender\": \"Male\",\r\n    \"ethnicity\": \"African\",\r\n     \"email\": \"mondise.mtho@gmail.com\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/customer/onboardCustomer",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"customer",
+						"onboardCustomer"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "findCustomerById",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/customers/retrieve/1",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"customers",
+						"retrieve",
+						"1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "findAllCustomers",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "password",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "test",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/api/v1/customer/retrieveAllCustomers",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"customer",
+						"retrieveAllCustomers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "doTransfer",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"transferAmount\": \"200\",\r\n    \"customerId\": \"1\",\r\n    \"fromSavingsAccount\": \"true\"\r\n\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/account/transfer",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"account",
+						"transfer"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "receivePayment",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"accountNumber\": \"408954672742921229992965773\",\r\n    \"paymentAmount\": \"1000\",\r\n    \"accountType\": \"SAVINGS\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/account/pay",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"account",
+						"pay"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "getTransactionHistory",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "debitAccount",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"accountNumber\": \"288938522741478087175663\",\r\n    \"amount\": \"1000\",\r\n    \"accountType\": \"\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/account/debit",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"account",
+						"debit"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "creditAccount",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"accountNumber\": \"928544926402655\",\r\n    \"amount\": \"1000\",\r\n    \"accountType\": \"SAVINGS\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/account/credit",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"account",
+						"credit"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "reconcileTransactionsFromBankX",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"transactionRequests\": [\r\n        {\r\n            \"accountNumber\": \"408954672742921229992965773\",\r\n            \"amount\": \"5000\",\r\n            \"transactionType\": \"DEBIT\",\r\n            \"transactionId\": \"TRANS101010\"\r\n        },\r\n        {\r\n            \"accountNumber\": \"408954672742921229992965773\",\r\n            \"amount\": \"5000\",\r\n            \"transactionType\": \"DEBIT\",\r\n            \"transactionId\": \"TRANS101010\"\r\n        },\r\n        {\r\n            \"accountNumber\": \"408954672742921229992965773\",\r\n            \"amount\": \"5000\",\r\n            \"transactionType\": \"DEBIT\",\r\n            \"transactionId\": \"TRANS101010\"\r\n        }\r\n    ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/transaction/reconcile-transactions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"transaction",
+						"reconcile-transactions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "processSingleTransaction",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"accountNumber\": \"081977744076271011903\",\r\n    \"amount\": 50000.00,\r\n    \"transactionType\": \"DEBIT\",\r\n    \"transactionId\": \"TRANS102020020\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/transaction/process-transaction",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"transaction",
+						"process-transaction"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "processMultiTransactions",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "[\r\n    {\r\n        \"accountNumber\": \"408954672742921229992965773\",\r\n        \"amount\": \"5000\",\r\n        \"transactionType\": \"DEBIT\",\r\n        \"transactionId\": \"TRANS101010\"\r\n    },\r\n    {\r\n        \"accountNumber\": \"408954672742921229992965773\",\r\n        \"amount\": \"5000\",\r\n        \"transactionType\": \"DEBIT\",\r\n        \"transactionId\": \"TRANS101010\"\r\n    },\r\n    {\r\n        \"accountNumber\": \"408954672742921229992965773\",\r\n        \"amount\": \"5000\",\r\n        \"transactionType\": \"DEBIT\",\r\n        \"transactionId\": \"TRANS101010\"\r\n    }\r\n]",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/transaction/process-multi-transaction",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"transaction",
+						"process-multi-transaction"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

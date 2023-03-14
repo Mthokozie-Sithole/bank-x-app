@@ -1,12 +1,15 @@
 package com.banking.bankingapp.repository;
 
-import com.banking.bankingapp.model.CurrentAccount;
+import com.banking.bankingapp.model.entities.BankAccount;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 @Qualifier("currentAccountRepo")
-public interface CurrentAccountRepository extends CrudRepository<CurrentAccount, Long> {
-    CurrentAccount findByAccountNumber(String accountNumber);
+public interface BankAccountRepository extends CrudRepository<BankAccount, Long> {
+
+    Optional<BankAccount> findByAccountNumber(String accountNumber);
 }

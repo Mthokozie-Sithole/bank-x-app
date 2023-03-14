@@ -1,13 +1,15 @@
-package com.banking.bankingapp.model;
+package com.banking.bankingapp.model.dto.request;
+
+import com.banking.bankingapp.model.constants.AccountType;
 
 public class PaymentRequest {
     private String accountNumber;
     private Double paymentAmount;
-    private boolean toSavingsAccount;
+    private AccountType accountType;
 
-    public PaymentRequest(Double paymentAmount, boolean toSavingsAccount, String accountNumber) {
+    public PaymentRequest(Double paymentAmount, String accountNumber, AccountType accountType) {
         this.paymentAmount = paymentAmount;
-        this.toSavingsAccount = toSavingsAccount;
+        this.accountType = accountType;
         this.accountNumber = accountNumber;
     }
 
@@ -19,12 +21,12 @@ public class PaymentRequest {
         this.paymentAmount = paymentAmount;
     }
 
-    public boolean isToSavingsAccount() {
-        return toSavingsAccount;
+    public AccountType getAccountType() {
+        return accountType;
     }
 
-    public void setToSavingsAccount(boolean toSavingsAccount) {
-        this.toSavingsAccount = toSavingsAccount;
+    public void setAccountType(AccountType accountType) {
+        this.accountType = accountType;
     }
 
     public String getAccountNumber() {

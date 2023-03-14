@@ -1,6 +1,9 @@
-package com.banking.bankingapp.model;
+package com.banking.bankingapp.model.entities;
 
+import com.banking.bankingapp.model.Auditable;
 import jakarta.persistence.*;
+
+import java.util.List;
 
 @Entity
 @Table(name = "customer")
@@ -13,12 +16,8 @@ public class Customer extends Auditable<String> {
     private String gender;
     private String ethnicity;
     private String email;
-
-    @OneToOne
-    private SavingsAccount savingsAccount;
-
-    @OneToOne
-    private CurrentAccount currentAccount;
+    @OneToMany(mappedBy = "customer",fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<BankAccount> bankAccounts;
 
     public Customer() {
     }
@@ -80,19 +79,11 @@ public class Customer extends Auditable<String> {
         this.email = email;
     }
 
-    public SavingsAccount getSavingsAccount() {
-        return savingsAccount;
+    public List<BankAccount> getBankAccounts() {
+        return bankAccounts;
     }
 
-    public void setSavingsAccount(SavingsAccount savingsAccount) {
-        this.savingsAccount = savingsAccount;
-    }
-
-    public CurrentAccount getCurrentAccount() {
-        return currentAccount;
-    }
-
-    public void setCurrentAccount(CurrentAccount currentAccount) {
-        this.currentAccount = currentAccount;
+    public void setBankAccounts(List<BankAccount> bankAccounts) {
+        this.bankAccounts = bankAccounts;
     }
 }

@@ -1,126 +1,108 @@
 package com.banking.bankingapp.service;
 
-import com.banking.bankingapp.model.*;
-import com.banking.bankingapp.repository.CurrentAccountRepository;
+import com.banking.bankingapp.exception.EntityNotFoundException;
+import com.banking.bankingapp.exception.GlobalErrorCode;
+import com.banking.bankingapp.exception.InsufficientFundsException;
+import com.banking.bankingapp.model.constants.AccountType;
+import com.banking.bankingapp.model.constants.TransactionType;
+import com.banking.bankingapp.model.dto.request.TransactionRequest;
+import com.banking.bankingapp.model.dto.request.PaymentRequest;
+import com.banking.bankingapp.model.dto.request.TransferRequest;
+import com.banking.bankingapp.model.dto.response.AccountTransactionResponse;
+import com.banking.bankingapp.model.entities.BankAccount;
+import com.banking.bankingapp.model.entities.TransactionHistory;
+import com.banking.bankingapp.repository.BankAccountRepository;
 import com.banking.bankingapp.repository.CustomerRepository;
-import com.banking.bankingapp.repository.SavingsAccountRepository;
 import com.banking.bankingapp.repository.TransactionHistoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class AccountService {
-    private final CurrentAccountRepository currentAccountRepository;
-    private final SavingsAccountRepository savingsAccountRepository;
+    private final BankAccountRepository bankAccountRepository;
     private final CustomerRepository customerRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
 
     @Autowired
-    public AccountService(CurrentAccountRepository currentAccountRepository,
-                          SavingsAccountRepository savingsAccountRepository,
+    public AccountService(BankAccountRepository bankAccountRepository,
                           CustomerRepository customerRepository,
                           TransactionHistoryRepository transactionHistoryRepository) {
 
-        this.currentAccountRepository = currentAccountRepository;
-        this.savingsAccountRepository = savingsAccountRepository;
+        this.bankAccountRepository = bankAccountRepository;
         this.customerRepository = customerRepository;
         this.transactionHistoryRepository = transactionHistoryRepository;
     }
 
-    public BankAccount receivePayment(PaymentRequest paymentRequest) {
-        Double newBalance = 0.0;
-        BankAccount bankAccount = null;
+    public AccountTransactionResponse receivePayment(PaymentRequest paymentRequest) {
+        BankAccount bankAccount = this.bankAccountRepository
+                .findByAccountNumber(paymentRequest.getAccountNumber())
+                .orElseThrow(EntityNotFoundException::new);
 
-        if (paymentRequest.isToSavingsAccount()) {
-            SavingsAccount customerSavingsAccount = this.savingsAccountRepository
-                    .findByAccountNumber(paymentRequest.getAccountNumber());
+        /*All payments made into the Savings Account will be credited with a 0.5% interest of the current balance.*/
+        final double creditAmount = 0.5 * bankAccount.getBalance().doubleValue() / 100;
 
-            if (Objects.nonNull(customerSavingsAccount)) {
-                final double currentBalance = customerSavingsAccount.getBalance().doubleValue();
-                newBalance = (currentBalance + currentBalance * 0.5f) + paymentRequest.getPaymentAmount();
-                customerSavingsAccount.setBalance(BigDecimal.valueOf(newBalance));
-                this.savingsAccountRepository.save(customerSavingsAccount);
+        final BigDecimal newBalance = subtractFromCurrentBalance(creditAmount
+                , BigDecimal.valueOf(paymentRequest.getPaymentAmount()));
 
-                bankAccount = createBankAccountResponse(customerSavingsAccount.getAccountNumber(),
-                        customerSavingsAccount.getAccountName(), customerSavingsAccount.getBalance());
-            }
-        } else {
-            CurrentAccount currentAccount = this.currentAccountRepository
-                    .findByAccountNumber(paymentRequest.getAccountNumber());
+        bankAccount.setBalance(newBalance);
 
-            if (Objects.nonNull(currentAccount)) {
-                final double currentBalance = currentAccount.getBalance().doubleValue();
-                newBalance = (currentBalance + currentBalance * 0.5f) + paymentRequest.getPaymentAmount();
-                currentAccount.setBalance(BigDecimal.valueOf(newBalance));
-                this.currentAccountRepository.save(currentAccount);
+        this.bankAccountRepository.save(bankAccount);
 
-                bankAccount = createBankAccountResponse(currentAccount.getAccountNumber(),
-                        currentAccount.getAccountName(), currentAccount.getBalance());
-            }
-        }
+        AccountTransactionResponse accountTransactionResponse = this
+                .createAccountTransactionResponse(bankAccount.getAccountNumber(),
+                        bankAccount.getAccountType(), bankAccount.getBalance());
 
-        createTransactionHistoryEntry("Incoming payment",
+        this.createTransactionHistoryEntry(TransactionType.INCOMING_PAYMENT,
                 BigDecimal.valueOf(paymentRequest.getPaymentAmount()),
                 paymentRequest.getAccountNumber(), null);
 
-        return bankAccount;
+        return accountTransactionResponse;
     }
 
-    private BankAccount createBankAccountResponse(String accountNumber, String accountName, BigDecimal balance) {
-        return new BankAccount(accountNumber, accountName, balance);
+    private AccountTransactionResponse createAccountTransactionResponse(String accountNumber,
+                                                                        AccountType accountType,
+                                                                        BigDecimal balance) {
+        return new AccountTransactionResponse(accountNumber, accountType, balance);
     }
 
-    public Customer doTransfer(TransferRequest transferRequest) {
-        Optional<Customer> customer = this.customerRepository
-                .findById(Long.valueOf(transferRequest.getCustomerId()));
+    public AccountTransactionResponse doTransfer(TransferRequest transferRequest) {
+        BankAccount fromAccount = this.bankAccountRepository
+                .findByAccountNumber(transferRequest.getFromAccount())
+                .orElseThrow(EntityNotFoundException::new);
 
-        Optional<CurrentAccount> currentAccount = this.currentAccountRepository
-                .findById(Long.valueOf(transferRequest.getCustomerId()));
+        validateBalance(fromAccount, BigDecimal.valueOf(transferRequest.getTransferAmount()));
 
-        Optional<SavingsAccount> savingsAccount = this.savingsAccountRepository
-                .findById(Long.valueOf(transferRequest.getCustomerId()));
+        BankAccount toAccount = this.bankAccountRepository
+                .findByAccountNumber(transferRequest.getToAccount())
+                .orElseThrow(EntityNotFoundException::new);
 
-        if (currentAccount.isPresent() && savingsAccount.isPresent()) {
-            CurrentAccount customerCurrentAccount = currentAccount.get();
-            SavingsAccount customerSavingsAccount = savingsAccount.get();
+        fromAccount.setBalance(subtractFromCurrentBalance(transferRequest
+                .getTransferAmount(), fromAccount.getBalance()));
 
-            if (transferRequest.isFromSavingsAccount()) {
-                transferFromSavingsAccount(transferRequest,
-                        savingsAccount,
-                        customerCurrentAccount,
-                        customerSavingsAccount);
+        toAccount.setBalance(addToCurrentBalance(transferRequest
+                .getTransferAmount(), toAccount.getBalance()));
 
-                createTransactionHistoryEntry("Transfer",
-                        BigDecimal.valueOf(transferRequest.getTransferAmount()),
-                        customerCurrentAccount.getAccountNumber(),
-                        customerSavingsAccount.getAccountNumber());
-            } else {
-                transferFromCurrentAccount(transferRequest,
-                        currentAccount,
-                        customerCurrentAccount,
-                        customerSavingsAccount);
+        createTransactionHistoryEntry(TransactionType.TRANSFER, BigDecimal.
+                        valueOf(transferRequest.getTransferAmount()),
+                transferRequest.getToAccount(),
+                transferRequest.getFromAccount());
 
-                createTransactionHistoryEntry("Transfer", BigDecimal.
-                                valueOf(transferRequest.getTransferAmount()),
-                        customerSavingsAccount.getAccountNumber(),
-                        customerCurrentAccount.getAccountNumber());
-            }
-        }
-        return customer.get();
+        return new AccountTransactionResponse(toAccount.getAccountNumber()
+                , toAccount.getAccountType()
+                , toAccount.getBalance());
     }
 
-    private void createTransactionHistoryEntry(String Transfer,
+    private void createTransactionHistoryEntry(TransactionType transactionType,
                                                BigDecimal transactionAmount,
                                                String toAccount,
                                                String fromAccount) {
 
         TransactionHistory transactionHistory = new TransactionHistory();
-        transactionHistory.setTransactionType(Transfer);
+        transactionHistory.setTransactionId(new StringBuilder("TRANS").append(this.generateRandomNumber()).toString());
+        transactionHistory.setTransactionType(transactionType);
         transactionHistory.setTransactionAmount(transactionAmount);
         transactionHistory.setToAccount(toAccount);
         transactionHistory.setFromAccount(fromAccount);
@@ -129,142 +111,79 @@ public class AccountService {
         this.transactionHistoryRepository.save(transactionHistory);
     }
 
-    private void transferFromSavingsAccount(TransferRequest transferRequest,
-                                            Optional<SavingsAccount> savingsAccount,
-                                            CurrentAccount customerCurrentAccount,
-                                            SavingsAccount customerSavingsAccount) {
+    public AccountTransactionResponse debitAccount(TransactionRequest transactionRequest) {
+        BankAccount bankAccount = this.bankAccountRepository
+                .findByAccountNumber(transactionRequest.getAccountNumber())
+                .orElseThrow(EntityNotFoundException::new);
 
-        if (savingsAccount.get().getBalance().doubleValue() >= transferRequest.getTransferAmount()) {
-            customerCurrentAccount.setBalance(customerCurrentAccount.getBalance()
-                    .add(new BigDecimal(transferRequest.getTransferAmount())));
+        bankAccount.setBalance(addToCurrentBalance(transactionRequest.getAmount(), bankAccount.getBalance()));
+        this.bankAccountRepository.save(bankAccount);
 
-            customerSavingsAccount.setBalance(customerSavingsAccount.getBalance()
-                    .subtract(new BigDecimal(transferRequest.getTransferAmount())));
+        AccountTransactionResponse accountTransactionResponse = this
+                .createAccountTransactionResponse(bankAccount.getAccountNumber(),
+                        bankAccount.getAccountType(),
+                        bankAccount.getBalance());
 
-            updateCustomerAccounts(customerCurrentAccount, customerSavingsAccount);
-        }
+        this.createTransactionHistoryEntry(TransactionType.DEBIT,
+                BigDecimal.valueOf(transactionRequest.getAmount()),
+                null, bankAccount.getAccountNumber());
+
+        return accountTransactionResponse;
     }
 
-    private void transferFromCurrentAccount(TransferRequest transferRequest,
-                                            Optional<CurrentAccount> currentAccount,
-                                            CurrentAccount customerCurrentAccount,
-                                            SavingsAccount customerSavingsAccount) {
+    public AccountTransactionResponse creditAccount(TransactionRequest transactionRequest) {
+        BankAccount bankAccount = this.bankAccountRepository
+                .findByAccountNumber(transactionRequest.getAccountNumber())
+                .orElseThrow(EntityNotFoundException::new);
 
-        if (currentAccount.get().getBalance().doubleValue() >= transferRequest.getTransferAmount()) {
-            customerCurrentAccount.setBalance(customerCurrentAccount.getBalance()
-                    .subtract(new BigDecimal(transferRequest.getTransferAmount())));
+        this.validateBalance(bankAccount, BigDecimal.valueOf(transactionRequest.getAmount()));
 
-            customerSavingsAccount.setBalance(customerSavingsAccount.getBalance()
-                    .add(new BigDecimal(transferRequest.getTransferAmount())));
+        bankAccount.setBalance(subtractFromCurrentBalance(transactionRequest.getAmount()
+                , bankAccount.getBalance()).negate());
 
-            updateCustomerAccounts(customerCurrentAccount, customerSavingsAccount);
-        }
+        this.bankAccountRepository.save(bankAccount);
+
+        this.createTransactionHistoryEntry(TransactionType.CREDIT,
+                BigDecimal.valueOf(transactionRequest.getAmount()),
+                null, transactionRequest.getAccountNumber());
+
+        AccountTransactionResponse accountTransactionResponse = createAccountTransactionResponse(
+                bankAccount.getAccountNumber(),
+                bankAccount.getAccountType(),
+                bankAccount.getBalance()
+        );
+
+        return accountTransactionResponse;
     }
 
-    public BankAccount debitAccount(AccountRequest accountRequest) {
+    private static BigDecimal addToCurrentBalance(Double amount, final BigDecimal currentBalance) {
+        return currentBalance.add(BigDecimal.valueOf(amount));
+    }
+
+    private static BigDecimal subtractFromCurrentBalance(Double amount, final BigDecimal currentBalance) {
+        return currentBalance.subtract(BigDecimal.valueOf(amount));
+    }
+
+    public BankAccount createBankAccount(AccountType accountType,
+                                         Double openingBalance,
+                                         boolean paymentEnabled) {
+
         BankAccount bankAccount = new BankAccount();
-
-        if (accountRequest.getAccountType().equals("Current")) {
-            CurrentAccount currentAccount = this.currentAccountRepository
-                    .findByAccountNumber(accountRequest.getAccountNumber());
-
-            if (Objects.nonNull(currentAccount)) {
-                final BigDecimal newBalance = currentAccount.getBalance()
-                        .add(BigDecimal.valueOf(accountRequest.getAmount()));
-
-                currentAccount.setBalance(newBalance);
-                this.currentAccountRepository.save(currentAccount);
-
-                bankAccount = this.createBankAccountResponse(currentAccount.getAccountNumber(),
-                        currentAccount.getAccountName(),
-                        currentAccount.getBalance());
-            }
-        } else {
-            SavingsAccount savingsAccount = this.savingsAccountRepository
-                    .findByAccountNumber(accountRequest.getAccountNumber());
-
-            if (Objects.nonNull(savingsAccount)) {
-                final BigDecimal newBalance = savingsAccount.getBalance()
-                        .add(BigDecimal.valueOf(accountRequest.getAmount()));
-
-                savingsAccount.setBalance(newBalance);
-                this.savingsAccountRepository.save(savingsAccount);
-
-                bankAccount = this.createBankAccountResponse(savingsAccount.getAccountNumber(),
-                        savingsAccount.getAccountName(),
-                        savingsAccount.getBalance());
-            }
-        }
-
-        this.createTransactionHistoryEntry("Debit",
-                BigDecimal.valueOf(accountRequest.getAmount()),
-                accountRequest.getAccountNumber(), null);
-
+        bankAccount.setAccountType(accountType);
+        bankAccount.setAccountNumber(this.generateRandomNumber());
+        bankAccount.setBalance(new BigDecimal(openingBalance));
+        bankAccount.setPaymentEnabled(paymentEnabled);
+        this.bankAccountRepository.save(bankAccount);
         return bankAccount;
     }
 
-    public BankAccount creditAccount(AccountRequest accountRequest) {
-        BankAccount bankAccount = new BankAccount();
-
-        if (accountRequest.getAccountType().equals("Current")) {
-            CurrentAccount currentAccount = this.currentAccountRepository
-                    .findByAccountNumber(accountRequest.getAccountNumber());
-
-            final BigDecimal newBalance = currentAccount.getBalance()
-                    .subtract(BigDecimal.valueOf(accountRequest.getAmount()));
-
-            currentAccount.setBalance(newBalance);
-            this.currentAccountRepository.save(currentAccount);
-
-            bankAccount = this.createBankAccountResponse(currentAccount.getAccountNumber(),
-                    currentAccount.getAccountName(),
-                    currentAccount.getBalance());
-        } else {
-            SavingsAccount savingsAccount = this.savingsAccountRepository
-                    .findByAccountNumber(accountRequest.getAccountNumber());
-
-            final BigDecimal newBalance = savingsAccount.getBalance()
-                    .subtract(BigDecimal.valueOf(accountRequest.getAmount()));
-
-            savingsAccount.setBalance(newBalance);
-            this.savingsAccountRepository.save(savingsAccount);
-
-            bankAccount = this.createBankAccountResponse(savingsAccount.getAccountNumber(),
-                    savingsAccount.getAccountName(),
-                    savingsAccount.getBalance());
-
-        }
-
-        this.createTransactionHistoryEntry("Credit",
-                BigDecimal.valueOf(accountRequest.getAmount()),
-                null, accountRequest.getAccountNumber());
-
-        return bankAccount;
-    }
-    private void updateCustomerAccounts(CurrentAccount customerCurrentAccount, SavingsAccount customerSavingsAccount) {
-        this.savingsAccountRepository.save(customerSavingsAccount);
-        this.currentAccountRepository.save(customerCurrentAccount);
-    }
-
-    public SavingsAccount createNewSavingsAccount() {
-        SavingsAccount savingsAccount = new SavingsAccount();
-        savingsAccount.setAccountName("Savings");
-        savingsAccount.setAccountNumber(this.generateAccountNumber());
-        savingsAccount.setBalance(new BigDecimal(500));
-        this.savingsAccountRepository.save(savingsAccount);
-        return savingsAccount;
-    }
-
-    public CurrentAccount createNewCurrentAccount() {
-        CurrentAccount currentAccount = new CurrentAccount();
-        currentAccount.setAccountName("Current");
-        currentAccount.setAccountNumber(this.generateAccountNumber());
-        currentAccount.setBalance(new BigDecimal(0));
-        this.currentAccountRepository.save(currentAccount);
-        return currentAccount;
-    }
-
-    private String generateAccountNumber() {
+    private String generateRandomNumber() {
         return UUID.randomUUID().toString().replaceAll("[\\D.]", "");
+    }
+
+    private void validateBalance(BankAccount bankAccount, BigDecimal amount) {
+        if (bankAccount.getBalance().compareTo(BigDecimal.ZERO) < 0 || bankAccount.getBalance().compareTo(amount) < 0) {
+            throw new InsufficientFundsException("Insufficient funds in the account " + bankAccount.getAccountNumber(), GlobalErrorCode.INSUFFICIENT_FUNDS);
+        }
     }
 }
