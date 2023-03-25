@@ -64,7 +64,7 @@ public class TransactionService {
         return transactionHistory;
     }
 
-    public AccountTransactionResponse processSingleTransaction(TransactionRequest transactionRequest) {
+    public AccountTransactionResponse processSingleTransaction(TransactionRequest transactionRequest)  {
         AccountTransactionResponse accountTransactionResponse = new AccountTransactionResponse();
         BankAccount bankAccount;
 

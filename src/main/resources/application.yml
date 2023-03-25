@@ -1,0 +1,38 @@
+server:
+    port: 8080
+spring:
+    datasource:
+        driverClassName: org.h2.Driver
+        password: ''
+        url: jdbc:h2:mem:memDb;DB_CLOSE_DELAY=-1
+        username: sa
+    h2:
+        console:
+            enabled: true
+            path: /h2
+    jpa:
+        datasource-platform: org.hibernate.dialect.H2Dialect
+        hibernate:
+            ddl-auto: create-drop
+        properties:
+            hibernate:
+                format_sql: true
+        show-sql: true
+    kafka:
+        bootstrap-servers: 127.0.0.1:9092
+        topics:
+            payments-topic: payments-topic
+            transfers-topic: transfers-topic
+            debit-topic: debit-topic
+            credit-topic: credit-topic
+    notifications:
+        subjects:
+            payment: Payment Received
+            transfer: Fund Transfer
+            debit: Account Debited
+            credit: Account Credited
+        contents:
+            payment-message: A payment of {0} has been made to account number {1}
+            transfer-message: An amount of {0} was transferred from {1} to {2}
+            debit-message: An amount of {0} was debited to account {1}
+            credit-message: An amount of {0} was credited from account {1}

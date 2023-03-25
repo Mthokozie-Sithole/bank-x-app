@@ -15,16 +15,13 @@ public class BankAccount extends Auditable<String> implements Serializable {
     private Long id;
     private String accountNumber;
     private BigDecimal balance;
-
     private boolean paymentEnabled;
     @Enumerated(EnumType.ORDINAL)
     private AccountType accountType;
-
     @OneToOne
     private Customer customer;
 
-    public BankAccount() {
-    }
+    public BankAccount() {}
 
     public BankAccount(Long id, String accountNumber,
                        BigDecimal balance, AccountType accountType,

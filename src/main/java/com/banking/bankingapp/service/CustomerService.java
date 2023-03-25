@@ -16,7 +16,6 @@ import java.util.Optional;
 public class CustomerService {
     private final CustomerRepository customerRepository;
     private final BankAccountRepository bankAccountRepository;
-
     private AccountService accountService;
     @Autowired
     public CustomerService(CustomerRepository customerRepository,
@@ -35,14 +34,12 @@ public class CustomerService {
         BankAccount currentAccount = this.accountService
                 .createBankAccount(AccountType.CURRENT, 0.0d, true);
 
-       /* savingAccount.setCustomer(customer);
-        currentAccount.setCustomer(customer);
-*/
         this.bankAccountRepository.save(savingAccount);
         this.bankAccountRepository.save(currentAccount);
 
         List<BankAccount> customerAccounts = Arrays.asList(savingAccount, currentAccount);
         customer.setBankAccounts(customerAccounts);
+
         return this.customerRepository.save(customer);
     }
 

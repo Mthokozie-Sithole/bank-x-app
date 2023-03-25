@@ -5,16 +5,16 @@ import com.banking.bankingapp.exception.GlobalErrorCode;
 import com.banking.bankingapp.exception.InsufficientFundsException;
 import com.banking.bankingapp.model.constants.AccountType;
 import com.banking.bankingapp.model.constants.TransactionType;
-import com.banking.bankingapp.model.dto.request.TransactionRequest;
-import com.banking.bankingapp.model.dto.request.PaymentRequest;
-import com.banking.bankingapp.model.dto.request.TransferRequest;
+import com.banking.bankingapp.model.dto.request.*;
 import com.banking.bankingapp.model.dto.response.AccountTransactionResponse;
 import com.banking.bankingapp.model.entities.BankAccount;
 import com.banking.bankingapp.model.entities.TransactionHistory;
 import com.banking.bankingapp.repository.BankAccountRepository;
 import com.banking.bankingapp.repository.CustomerRepository;
 import com.banking.bankingapp.repository.TransactionHistoryRepository;
+import com.banking.bankingapp.util.NotificationHelper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -22,45 +22,105 @@ import java.util.UUID;
 
 @Service
 public class AccountService {
+    @Value("${spring.kafka.topics.payments-topic}")
+    private String paymentsTopic;
+
+    @Value("${spring.kafka.topics.transfers-topic}")
+    private String transfersTopic;
+
+    @Value("${spring.kafka.topics.debit-topic}")
+    private String debitTopic;
+
+    @Value("${spring.kafka.topics.credit-topic}")
+    private String creditTopic;
+
+    @Value("${spring.notifications.subjects.payment}")
+    private String paymentSubject;
+
+    @Value("${spring.notifications.subjects.transfer}")
+    private String transferSubject;
+
+    @Value("${spring.notifications.subjects.debit}")
+    private String debitSubject;
+
+    @Value("${spring.notifications.subjects.credit}")
+    private String creditSubject;
+
+    @Value("${spring.notifications.contents.payment-message}")
+    private String paymentNotification;
+
+    @Value("${spring.notifications.contents.transfer-message}")
+    private String fundTransferNotification;
+
+    @Value("${spring.notifications.contents.debit-message}")
+    private String debitNotification;
+
+    @Value("${spring.notifications.contents.credit-message}")
+    private String creditNotification;
+
+
     private final BankAccountRepository bankAccountRepository;
     private final CustomerRepository customerRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
+    private final NotificationService notificationService;
 
     @Autowired
     public AccountService(BankAccountRepository bankAccountRepository,
                           CustomerRepository customerRepository,
-                          TransactionHistoryRepository transactionHistoryRepository) {
+                          TransactionHistoryRepository transactionHistoryRepository,
+                          NotificationService notificationService) {
 
         this.bankAccountRepository = bankAccountRepository;
         this.customerRepository = customerRepository;
         this.transactionHistoryRepository = transactionHistoryRepository;
+        this.notificationService = notificationService;
     }
 
     public AccountTransactionResponse receivePayment(PaymentRequest paymentRequest) {
-        BankAccount bankAccount = this.bankAccountRepository
-                .findByAccountNumber(paymentRequest.getAccountNumber())
-                .orElseThrow(EntityNotFoundException::new);
+        AccountTransactionResponse accountTransactionResponse = null;
 
-        /*All payments made into the Savings Account will be credited with a 0.5% interest of the current balance.*/
-        final double creditAmount = 0.5 * bankAccount.getBalance().doubleValue() / 100;
+        try {
+            BankAccount bankAccount = this.bankAccountRepository
+                    .findByAccountNumber(paymentRequest.getAccountNumber())
+                    .orElseThrow(EntityNotFoundException::new);
 
-        final BigDecimal newBalance = subtractFromCurrentBalance(creditAmount
-                , BigDecimal.valueOf(paymentRequest.getPaymentAmount()));
+            /*All payments made into the Savings Account will be credited with a 0.5% interest of the current balance.*/
+            final double creditAmount = 0.5 * bankAccount.getBalance().doubleValue() / 100;
 
-        bankAccount.setBalance(newBalance);
+            final BigDecimal newBalance = subtractFromCurrentBalance(creditAmount
+                    , BigDecimal.valueOf(paymentRequest.getPaymentAmount()));
 
-        this.bankAccountRepository.save(bankAccount);
+            bankAccount.setBalance(newBalance);
 
-        AccountTransactionResponse accountTransactionResponse = this
-                .createAccountTransactionResponse(bankAccount.getAccountNumber(),
-                        bankAccount.getAccountType(), bankAccount.getBalance());
+            this.bankAccountRepository.save(bankAccount);
 
-        this.createTransactionHistoryEntry(TransactionType.INCOMING_PAYMENT,
-                BigDecimal.valueOf(paymentRequest.getPaymentAmount()),
-                paymentRequest.getAccountNumber(), null);
+            accountTransactionResponse = this.createAccountTransactionResponse(bankAccount.getAccountNumber(),
+                    bankAccount.getAccountType(), bankAccount.getBalance());
 
+            this.createTransactionHistoryEntry(TransactionType.INCOMING_PAYMENT,
+                    BigDecimal.valueOf(paymentRequest.getPaymentAmount()),
+                    paymentRequest.getAccountNumber(), null);
+
+            final String notificationBody = this.paymentNotification
+                    .replace("{0}", String.valueOf(paymentRequest.getPaymentAmount()))
+                    .replace("{1}", paymentRequest.getAccountNumber());
+
+            Notification notification = NotificationHelper
+                    .buildNotification(paymentRequest.getAccountNumber(),
+                            paymentRequest.getPaymentAmount(), this.paymentSubject,
+                            notificationBody,
+                            TransactionType.INCOMING_PAYMENT);
+
+            System.out.println("Notification: " + notification);
+
+            this.notificationService.sendNotification(this.paymentsTopic, notification);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return accountTransactionResponse;
     }
+
 
     private AccountTransactionResponse createAccountTransactionResponse(String accountNumber,
                                                                         AccountType accountType,
@@ -69,27 +129,49 @@ public class AccountService {
     }
 
     public AccountTransactionResponse doTransfer(TransferRequest transferRequest) {
-        BankAccount fromAccount = this.bankAccountRepository
-                .findByAccountNumber(transferRequest.getFromAccount())
-                .orElseThrow(EntityNotFoundException::new);
+        BankAccount fromAccount;
+        BankAccount toAccount = null;
 
-        validateBalance(fromAccount, BigDecimal.valueOf(transferRequest.getTransferAmount()));
+        try {
+            fromAccount = this.bankAccountRepository
+                    .findByAccountNumber(transferRequest.getFromAccount())
+                    .orElseThrow(EntityNotFoundException::new);
 
-        BankAccount toAccount = this.bankAccountRepository
-                .findByAccountNumber(transferRequest.getToAccount())
-                .orElseThrow(EntityNotFoundException::new);
+            validateBalance(fromAccount, BigDecimal.valueOf(transferRequest.getTransferAmount()));
 
-        fromAccount.setBalance(subtractFromCurrentBalance(transferRequest
-                .getTransferAmount(), fromAccount.getBalance()));
+            toAccount = this.bankAccountRepository
+                    .findByAccountNumber(transferRequest.getToAccount())
+                    .orElseThrow(EntityNotFoundException::new);
 
-        toAccount.setBalance(addToCurrentBalance(transferRequest
-                .getTransferAmount(), toAccount.getBalance()));
+            fromAccount.setBalance(subtractFromCurrentBalance(transferRequest
+                    .getTransferAmount(), fromAccount.getBalance()));
 
-        createTransactionHistoryEntry(TransactionType.TRANSFER, BigDecimal.
-                        valueOf(transferRequest.getTransferAmount()),
-                transferRequest.getToAccount(),
-                transferRequest.getFromAccount());
+            toAccount.setBalance(addToCurrentBalance(transferRequest
+                    .getTransferAmount(), toAccount.getBalance()));
 
+            createTransactionHistoryEntry(TransactionType.TRANSFER, BigDecimal.
+                            valueOf(transferRequest.getTransferAmount()),
+                    transferRequest.getToAccount(),
+                    transferRequest.getFromAccount());
+
+            final String notificationBody = this.fundTransferNotification
+                    .replace("{0}", String.valueOf(transferRequest.getTransferAmount()))
+                    .replace("{1}", transferRequest.getFromAccount())
+                    .replace("{2}", transferRequest.getToAccount());
+
+            Notification notification = NotificationHelper
+                    .buildNotification(transferRequest.getFromAccount(),
+                            transferRequest.getTransferAmount(), this.transferSubject,
+                            notificationBody,
+                            TransactionType.TRANSFER);
+
+            System.out.println("Notification: " + notification);
+
+            this.notificationService.sendNotification(this.transfersTopic, notification);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return new AccountTransactionResponse(toAccount.getAccountNumber()
                 , toAccount.getAccountType()
                 , toAccount.getBalance());
@@ -112,46 +194,81 @@ public class AccountService {
     }
 
     public AccountTransactionResponse debitAccount(TransactionRequest transactionRequest) {
-        BankAccount bankAccount = this.bankAccountRepository
-                .findByAccountNumber(transactionRequest.getAccountNumber())
-                .orElseThrow(EntityNotFoundException::new);
+        AccountTransactionResponse accountTransactionResponse = null;
 
-        bankAccount.setBalance(addToCurrentBalance(transactionRequest.getAmount(), bankAccount.getBalance()));
-        this.bankAccountRepository.save(bankAccount);
+        try {
+            BankAccount bankAccount = this.bankAccountRepository
+                    .findByAccountNumber(transactionRequest.getAccountNumber())
+                    .orElseThrow(EntityNotFoundException::new);
 
-        AccountTransactionResponse accountTransactionResponse = this
-                .createAccountTransactionResponse(bankAccount.getAccountNumber(),
-                        bankAccount.getAccountType(),
-                        bankAccount.getBalance());
+            bankAccount.setBalance(addToCurrentBalance(transactionRequest.getAmount(), bankAccount.getBalance()));
+            this.bankAccountRepository.save(bankAccount);
 
-        this.createTransactionHistoryEntry(TransactionType.DEBIT,
-                BigDecimal.valueOf(transactionRequest.getAmount()),
-                null, bankAccount.getAccountNumber());
+            accountTransactionResponse = this
+                    .createAccountTransactionResponse(bankAccount.getAccountNumber(),
+                            bankAccount.getAccountType(),
+                            bankAccount.getBalance());
+
+            this.createTransactionHistoryEntry(TransactionType.DEBIT,
+                    BigDecimal.valueOf(transactionRequest.getAmount()),
+                    null, bankAccount.getAccountNumber());
+
+            final String notificationBody = this.debitNotification
+                    .replace("{0}", String.valueOf(transactionRequest.getAmount()))
+                    .replace("{1}", transactionRequest.getAccountNumber());
+
+            Notification notification = NotificationHelper.buildNotification(transactionRequest.getAccountNumber(),
+                            transactionRequest.getAmount(), this.debitSubject, notificationBody, TransactionType.DEBIT);
+
+            System.out.println("Notification: " + notification);
+
+            this.notificationService.sendNotification(this.debitTopic, notification);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         return accountTransactionResponse;
     }
 
     public AccountTransactionResponse creditAccount(TransactionRequest transactionRequest) {
-        BankAccount bankAccount = this.bankAccountRepository
-                .findByAccountNumber(transactionRequest.getAccountNumber())
-                .orElseThrow(EntityNotFoundException::new);
+        AccountTransactionResponse accountTransactionResponse = null;
 
-        this.validateBalance(bankAccount, BigDecimal.valueOf(transactionRequest.getAmount()));
+        try {
+            BankAccount bankAccount = this.bankAccountRepository
+                    .findByAccountNumber(transactionRequest.getAccountNumber())
+                    .orElseThrow(EntityNotFoundException::new);
 
-        bankAccount.setBalance(subtractFromCurrentBalance(transactionRequest.getAmount()
-                , bankAccount.getBalance()).negate());
+            this.validateBalance(bankAccount, BigDecimal.valueOf(transactionRequest.getAmount()));
 
-        this.bankAccountRepository.save(bankAccount);
+            bankAccount.setBalance(subtractFromCurrentBalance(transactionRequest.getAmount()
+                    , bankAccount.getBalance()));
 
-        this.createTransactionHistoryEntry(TransactionType.CREDIT,
-                BigDecimal.valueOf(transactionRequest.getAmount()),
-                null, transactionRequest.getAccountNumber());
+            this.bankAccountRepository.save(bankAccount);
 
-        AccountTransactionResponse accountTransactionResponse = createAccountTransactionResponse(
-                bankAccount.getAccountNumber(),
-                bankAccount.getAccountType(),
-                bankAccount.getBalance()
-        );
+            this.createTransactionHistoryEntry(TransactionType.CREDIT,
+                    BigDecimal.valueOf(transactionRequest.getAmount()),
+                    null, transactionRequest.getAccountNumber());
+
+            accountTransactionResponse = createAccountTransactionResponse(
+                    bankAccount.getAccountNumber(),
+                    bankAccount.getAccountType(),
+                    bankAccount.getBalance());
+
+            final String notificationBody = this.creditNotification
+                    .replace("{0}", String.valueOf(transactionRequest.getAmount()))
+                    .replace("{1}", transactionRequest.getAccountNumber());
+
+            Notification notification = NotificationHelper.buildNotification(transactionRequest.getAccountNumber(),
+                            transactionRequest.getAmount(), this.creditSubject, notificationBody, TransactionType.CREDIT);
+
+            System.out.println("Notification: " + notification);
+
+            this.notificationService.sendNotification(this.creditTopic, notification);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         return accountTransactionResponse;
     }
