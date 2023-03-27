@@ -26,7 +26,6 @@ public class CustomerService {
         this.bankAccountRepository = bankAccountRepository;
         this.accountService = accountService;
     }
-
     public Customer onboardCustomer(Customer customer) {
         BankAccount savingAccount = this.accountService
                 .createBankAccount(AccountType.SAVINGS, 500d, false);
@@ -39,14 +38,11 @@ public class CustomerService {
 
         List<BankAccount> customerAccounts = Arrays.asList(savingAccount, currentAccount);
         customer.setBankAccounts(customerAccounts);
-
         return this.customerRepository.save(customer);
     }
-
     public Optional<Customer> findCustomerById(Long customerId) {
         return Optional.ofNullable(this.customerRepository.findById(customerId).orElse(null));
     }
-
     public List<Customer> findAllCustomers() {
         return (List<Customer>) this.customerRepository.findAll();
     }

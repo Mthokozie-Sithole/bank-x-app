@@ -57,13 +57,10 @@ public class AccountService {
 
     @Value("${spring.notifications.contents.credit-message}")
     private String creditNotification;
-
-
     private final BankAccountRepository bankAccountRepository;
     private final CustomerRepository customerRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final NotificationService notificationService;
-
     @Autowired
     public AccountService(BankAccountRepository bankAccountRepository,
                           CustomerRepository customerRepository,
@@ -101,15 +98,9 @@ public class AccountService {
                     BigDecimal.valueOf(paymentRequest.getPaymentAmount()),
                     paymentRequest.getAccountNumber(), null);
 
-            final String notificationBody = this.paymentNotification
-                    .replace("{0}", String.valueOf(paymentRequest.getPaymentAmount()))
-                    .replace("{1}", paymentRequest.getAccountNumber());
-
-            Notification notification = NotificationHelper
-                    .buildNotification(paymentRequest.getAccountNumber(),
-                            paymentRequest.getPaymentAmount(), this.paymentSubject,
-                            notificationBody,
-                            TransactionType.INCOMING_PAYMENT);
+            Notification notification = NotificationHelper.buildPaymentNotification(paymentRequest,
+                    this.paymentNotification,
+                    this.paymentSubject);
 
             System.out.println("Notification: " + notification);
 
@@ -120,14 +111,11 @@ public class AccountService {
         }
         return accountTransactionResponse;
     }
-
-
     private AccountTransactionResponse createAccountTransactionResponse(String accountNumber,
                                                                         AccountType accountType,
                                                                         BigDecimal balance) {
         return new AccountTransactionResponse(accountNumber, accountType, balance);
     }
-
     public AccountTransactionResponse doTransfer(TransferRequest transferRequest) {
         BankAccount fromAccount;
         BankAccount toAccount = null;
@@ -154,16 +142,9 @@ public class AccountService {
                     transferRequest.getToAccount(),
                     transferRequest.getFromAccount());
 
-            final String notificationBody = this.fundTransferNotification
-                    .replace("{0}", String.valueOf(transferRequest.getTransferAmount()))
-                    .replace("{1}", transferRequest.getFromAccount())
-                    .replace("{2}", transferRequest.getToAccount());
-
-            Notification notification = NotificationHelper
-                    .buildNotification(transferRequest.getFromAccount(),
-                            transferRequest.getTransferAmount(), this.transferSubject,
-                            notificationBody,
-                            TransactionType.TRANSFER);
+            Notification notification = NotificationHelper.buildFundTransferNotification(transferRequest,
+                    this.fundTransferNotification,
+                    this.transferSubject);
 
             System.out.println("Notification: " + notification);
 
@@ -176,7 +157,6 @@ public class AccountService {
                 , toAccount.getAccountType()
                 , toAccount.getBalance());
     }
-
     private void createTransactionHistoryEntry(TransactionType transactionType,
                                                BigDecimal transactionAmount,
                                                String toAccount,
@@ -213,12 +193,9 @@ public class AccountService {
                     BigDecimal.valueOf(transactionRequest.getAmount()),
                     null, bankAccount.getAccountNumber());
 
-            final String notificationBody = this.debitNotification
-                    .replace("{0}", String.valueOf(transactionRequest.getAmount()))
-                    .replace("{1}", transactionRequest.getAccountNumber());
-
-            Notification notification = NotificationHelper.buildNotification(transactionRequest.getAccountNumber(),
-                            transactionRequest.getAmount(), this.debitSubject, notificationBody, TransactionType.DEBIT);
+            Notification notification = NotificationHelper.buildDebitNotification(transactionRequest,
+                    this.debitNotification,
+                    this.debitSubject);
 
             System.out.println("Notification: " + notification);
 
@@ -255,14 +232,8 @@ public class AccountService {
                     bankAccount.getAccountType(),
                     bankAccount.getBalance());
 
-            final String notificationBody = this.creditNotification
-                    .replace("{0}", String.valueOf(transactionRequest.getAmount()))
-                    .replace("{1}", transactionRequest.getAccountNumber());
-
-            Notification notification = NotificationHelper.buildNotification(transactionRequest.getAccountNumber(),
-                            transactionRequest.getAmount(), this.creditSubject, notificationBody, TransactionType.CREDIT);
-
-            System.out.println("Notification: " + notification);
+            Notification notification = NotificationHelper.buildCreditNotification(transactionRequest,
+                    this.creditNotification, this.creditSubject);
 
             this.notificationService.sendNotification(this.creditTopic, notification);
 
@@ -276,11 +247,9 @@ public class AccountService {
     private static BigDecimal addToCurrentBalance(Double amount, final BigDecimal currentBalance) {
         return currentBalance.add(BigDecimal.valueOf(amount));
     }
-
     private static BigDecimal subtractFromCurrentBalance(Double amount, final BigDecimal currentBalance) {
         return currentBalance.subtract(BigDecimal.valueOf(amount));
     }
-
     public BankAccount createBankAccount(AccountType accountType,
                                          Double openingBalance,
                                          boolean paymentEnabled) {
@@ -293,11 +262,9 @@ public class AccountService {
         this.bankAccountRepository.save(bankAccount);
         return bankAccount;
     }
-
     private String generateRandomNumber() {
         return UUID.randomUUID().toString().replaceAll("[\\D.]", "");
     }
-
     private void validateBalance(BankAccount bankAccount, BigDecimal amount) {
         if (bankAccount.getBalance().compareTo(BigDecimal.ZERO) < 0 || bankAccount.getBalance().compareTo(amount) < 0) {
             throw new InsufficientFundsException("Insufficient funds in the account " + bankAccount.getAccountNumber(), GlobalErrorCode.INSUFFICIENT_FUNDS);

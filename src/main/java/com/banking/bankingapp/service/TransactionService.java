@@ -19,9 +19,7 @@ import java.util.List;
 @Service
 public class TransactionService {
     private final TransactionHistoryRepository transactionHistoryRepository;
-
     private final BankAccountRepository bankAccountRepository;
-
     private final AccountService accountService;
 
     @Autowired

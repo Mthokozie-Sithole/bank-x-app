@@ -22,7 +22,7 @@ public class CustomerController {
 
     @PostMapping("/onboardCustomer")
     public ResponseEntity<Customer> onboardCustomer(@RequestBody Customer customer) {
-        return new ResponseEntity<>(this.customerService.onboardCustomer(customer), HttpStatus.OK);
+        return new ResponseEntity<>(this.customerService.onboardCustomer(customer), HttpStatus.CREATED);
     }
 
     @GetMapping("/retrieve/{id}")

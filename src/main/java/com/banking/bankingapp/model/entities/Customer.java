@@ -22,8 +22,7 @@ public class Customer extends Auditable<String> {
     public Customer() {
     }
 
-    public Customer(Long customerId, String firstName, String lastName, String gender, String ethnicity, String email) {
-        this.customerId = customerId;
+    public Customer(String firstName, String lastName, String gender, String ethnicity, String email) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.gender = gender;
